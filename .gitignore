@@ -1,0 +1,22 @@
+# Local env
+.env
+.env.local
+.env.*.local
+
+# Skeleton app folders are created locally by Makefile
+/apps/api/
+/apps/frontend/
+
+# Keep apps parent folder if needed
+!/apps/
+
+# OS/editor
+.DS_Store
+.idea/
+.vscode/
+
+# Logs
+*.log
+
+# Docker overrides
+docker-compose.override.yml

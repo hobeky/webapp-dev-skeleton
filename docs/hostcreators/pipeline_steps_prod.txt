@@ -1,0 +1,180 @@
+#!/usr/bin/env bash
+
+set -e
+
+# ============================================================
+# STEP 0
+# Go to project root.
+# This script assumes it is executed from the repository root.
+# Project structure:
+#   apps/api
+#   apps/frontend
+# ============================================================
+
+PROJECT_ROOT="$(pwd)"
+
+API_DIR="$PROJECT_ROOT/apps/api"
+FRONTEND_DIR="$PROJECT_ROOT/apps/frontend"
+TEMPLATE_PREVIEW_DIR="$API_DIR/public/template-preview"
+
+echo "Project root: $PROJECT_ROOT"
+echo "API dir: $API_DIR"
+echo "Frontend dir: $FRONTEND_DIR"
+
+
+# ============================================================
+# STEP 1
+# Build frontend template preview
+# ============================================================
+
+echo "Installing frontend dependencies..."
+
+cd "$FRONTEND_DIR"
+
+if [ -f package-lock.json ]; then
+  npm ci
+else
+  npm install
+fi
+
+echo "Building frontend..."
+
+npm run build
+
+echo "Publishing frontend template preview into Symfony public folder..."
+
+rm -rf "$TEMPLATE_PREVIEW_DIR"
+mkdir -p "$TEMPLATE_PREVIEW_DIR"
+
+cp -r "$FRONTEND_DIR/dist/"* "$TEMPLATE_PREVIEW_DIR/"
+
+echo "Frontend template preview published to:"
+echo "$TEMPLATE_PREVIEW_DIR"
+
+if [ ! -d "$TEMPLATE_PREVIEW_DIR/html" ]; then
+  echo "ERROR: Expected folder does not exist: $TEMPLATE_PREVIEW_DIR/html"
+  exit 1
+fi
+
+echo "Preview HTML files:"
+ls -la "$TEMPLATE_PREVIEW_DIR/html" | head -20
+
+
+# ============================================================
+# STEP 2
+# Go to Symfony API app
+# ============================================================
+
+cd "$API_DIR"
+
+
+# ============================================================
+# STEP 3
+# IMPORTANT! Do not forget to add those variables in variables tab
+# ============================================================
+
+VARS=(
+  "DATABASE_URL"
+  "MAILER_DSN"
+  "APP_MAIL_FROM"
+  "APP_PAYMENT_IBAN"
+  "APP_PAYMENT_BIC"
+  "APP_PAYMENT_ACCOUNT_HOLDER"
+  "APP_INVOICE_SUPPLIER_STREET"
+  "APP_INVOICE_SUPPLIER_CITY"
+  "APP_INVOICE_SUPPLIER_COUNTRY"
+  "APP_INVOICE_SUPPLIER_ICO"
+  "APP_INVOICE_SUPPLIER_DIC"
+  "APP_INVOICE_SUPPLIER_REGISTRY_TEXT"
+  "APP_INVOICE_SUPPLIER_PHONE"
+  "APP_INVOICE_SUPPLIER_EMAIL"
+  "APP_INVOICE_SUPPLIER_WEB"
+  "APP_URL"
+)
+
+ENV_FILE=".env.local"
+> "$ENV_FILE"
+
+for VAR in "${VARS[@]}"; do
+  if [ ! -z "${!VAR}" ]; then
+    echo "$VAR=${!VAR}" >> "$ENV_FILE"
+  else
+    echo "Warning: $VAR is not set in the current environment."
+  fi
+done
+
+echo ".env.local file created successfully with the specified environment variables."
+
+
+# ============================================================
+# STEP 4
+# Install Symfony dependencies
+# ============================================================
+
+composer install --no-cache --prefer-dist --no-dev --no-autoloader --no-scripts --no-progress
+
+
+# ============================================================
+# STEP 5
+# Prepare Symfony var directories
+# ============================================================
+
+mkdir -p var/cache var/log
+
+
+# ============================================================
+# STEP 6
+# Optimize Composer autoload
+# ============================================================
+
+composer dump-autoload --classmap-authoritative
+
+
+# ============================================================
+# STEP 7
+# Dump production env
+# ============================================================
+
+composer dump-env prod
+
+
+# ============================================================
+# STEP 8
+# Run Composer post install scripts
+# ============================================================
+
+composer run-script --no-dev post-install-cmd
+
+
+# ============================================================
+# STEP 9
+# Console permissions
+# ============================================================
+
+chmod +x bin/console
+
+
+# ============================================================
+# STEP 10
+# Clear and warm Symfony cache
+# ============================================================
+
+APP_ENV=prod APP_DEBUG=0 bin/console cache:clear
+APP_ENV=prod APP_DEBUG=0 bin/console cache:warmup
+
+
+# ============================================================
+# STEP 11
+# Run database migrations
+# ============================================================
+
+APP_ENV=prod APP_DEBUG=0 bin/console doctrine:migrations:migrate --no-interaction
+
+
+# ============================================================
+# DONE
+# ============================================================
+
+echo "Deployment finished successfully."
+echo "Template preview should be available at:"
+echo "/template-preview/html/index.html"
