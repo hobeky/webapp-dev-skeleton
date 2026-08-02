@@ -1,10 +1,10 @@
-# AgFuture
+# Webapp dev skeleton
 
 Monorepo-style project with separated backend, frontend, documentation, and infrastructure code.
 
 ## Purpose
 
-This repository is prepared for the AgFuture application and currently contains:
+This repository is prepared for the any  application and currently contains:
 
 - Symfony/PHP backend application in `apps/api`
 - Frontend application in `apps/frontend`
